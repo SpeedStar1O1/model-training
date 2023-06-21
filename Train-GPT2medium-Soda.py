@@ -1,22 +1,26 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, DataCollatorForLanguageModeling, TrainingArguments, Trainer
+from transformers import (AutoTokenizer, AutoModelForCausalLM, 
+                          BitsAndBytesConfig, DataCollatorForLanguageModeling, 
+                          TrainingArguments, Trainer
+                          )
 from datasets import load_dataset
+from peft import prepare_model_for_kbit_training
 
 # Define the model and tokenizer
 model_name = "gpt2-medium"
 
 # Define the BitsAndBytesConfig for QLoRA
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
+nf4_config = BitsAndBytesConfig(
+   load_in_4bit=True,
+   bnb_4bit_quant_type="nf4",
+   bnb_4bit_use_double_quant=True,
+   bnb_4bit_compute_dtype=torch.bfloat16
 )
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Load the model using QLoRA
-model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config, device_map={"":0})
+model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=nf4_config, device_map={"":0})
 
 # Prepare model for kbit training
 model.gradient_checkpointing_enable()
