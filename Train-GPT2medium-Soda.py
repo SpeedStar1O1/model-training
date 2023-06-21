@@ -3,7 +3,7 @@ from datasets import load_dataset
 from transformers import (
     AutoTokenizer, AutoModelForCausalLM, 
     TextDataset, DataCollatorForLanguageModeling, 
-    TrainingArguments, Trainer
+    TrainingArguments, Trainer, BitsAndBytesConfig
 )
 from accelerate import Accelerator
 
@@ -16,7 +16,17 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Set padding token
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-model = AutoModelForCausalLM.from_pretrained(model_name)
+
+# Define the BitsAndBytesConfig for 4-bit quantization
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
+)
+
+# Load the model with 4-bit quantization
+model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=quantization_config)
 
 # Define the dataset
 dataset_name = "allenai/soda"
