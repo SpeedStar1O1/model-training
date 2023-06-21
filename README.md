@@ -1,3 +1,9 @@
+Instillation:
+
+```
+pip install -U -r requirements.txt
+```
+
 1. Importing libraries:
 ```python
 from accelerate import Accelerator
