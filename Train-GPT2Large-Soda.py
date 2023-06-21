@@ -1,18 +1,11 @@
 from accelerate import Accelerator
 import torch
 from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    DataCollatorForLanguageModeling,
-    TrainingArguments,
-    Trainer,
-    AdamW,
-    get_linear_schedule_with_warmup
-)
+from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset, 
+                          DataCollatorForLanguageModeling, TrainingArguments, Trainer, AdamW, BitsAndBytesConfig)
 
-# Initialize the accelerator with fp16 for faster training
-accelerator = Accelerator(fp16=True)
+# Initialize the accelerator
+accelerator = Accelerator(fp16=True)  # Enable mixed precision training
 
 # Define the model and tokenizer
 model_name = "gpt2-medium"
@@ -22,10 +15,20 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModelForCausalLM.from_pretrained(model_name)
-
-# Enable gradient checkpointing to save memory
-model.config.gradient_checkpointing = True
+# Load model using QLoRA
+model = AutoModelForCausalLM.from_pretrained(
+    model_name_or_path=model_name,
+    load_in_4bit=True,
+    device_map='auto',
+    max_memory=48,  # Assuming you have a 48GB GPU
+    torch_dtype=torch.bfloat16,
+    quantization_config=BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type='nf4'
+    ),
+)
 
 # Define the dataset
 dataset_name = "allenai/soda"
@@ -44,20 +47,20 @@ data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 # Define the training arguments
 training_args = TrainingArguments(
-    output_dir="/content/drive/MyDrive/Colab Notebooks/trained-model",
+    output_dir="trained-models",
     overwrite_output_dir=True,
     num_train_epochs=3,
-    per_device_train_batch_size=8,  # Increase this if your GPU has enough memory
-    gradient_accumulation_steps=16,  # Increase gradient accumulation to simulate larger batch size
+    per_device_train_batch_size=8,  # Increased batch size
+    gradient_accumulation_steps=2,  # Using gradient accumulation
     save_steps=10000,
     save_total_limit=2,
-    learning_rate=5e-5,  # Experiment with different learning rates
+    learning_rate=5e-5,  # Increased learning rate
+    fp16=True,  # Enable mixed precision training
+    dataloader_num_workers=4,  # Number of subprocesses for data loading
+    # QLoRA uses paged_adamw_32bit optimizer
+    optimization_strategy="epoch",
+    optimizer_type="paged_adamw_32bit",
 )
-
-# Use a learning rate scheduler
-optimizer = AdamW(model.parameters(), lr=1e-5)
-total_steps = training_args.num_train_epochs * (len(encoded_dataset) // training_args.per_device_train_batch_size)
-scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
 # Prepare the training
 model, train_dataset = accelerator.prepare(model, encoded_dataset)
@@ -69,8 +72,6 @@ trainer = Trainer(
     train_dataset=train_dataset,
     data_collator=data_collator,
     tokenizer=tokenizer,
-    optimizer=optimizer,  # Use custom optimizer with scheduler
-    scheduler=scheduler  # Add learning rate scheduler
 )
 
 # Fine-tune the model
