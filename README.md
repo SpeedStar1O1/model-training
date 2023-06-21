@@ -1,9 +1,10 @@
-## Instillation:
+## Installation:
 
 ```
 pip install -U -r requirements.txt
 ```
 
+## Training VergilGPT2
 1. Importing libraries:
 ```python
 from accelerate import Accelerator
