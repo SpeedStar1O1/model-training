@@ -2,33 +2,30 @@ from accelerate import Accelerator
 import torch
 from datasets import load_dataset
 from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset, 
-                          DataCollatorForLanguageModeling, TrainingArguments, Trainer, AdamW, BitsAndBytesConfig)
+                          DataCollatorForLanguageModeling, TrainingArguments, Trainer, BitsAndBytesConfig)
 
 # Initialize the accelerator
 accelerator = Accelerator()
 
 # Define the model and tokenizer
 model_name = "gpt2-medium"
+
+# Define the BitsAndBytesConfig for QLoRA
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Set padding token
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-# Load model using QLoRA
-model = AutoModelForCausalLM.from_pretrained(
-    model_name_or_path=model_name,
-    load_in_4bit=True,
-    device_map='auto',
-    max_memory=48,  # Change this depending on your system
-    torch_dtype=torch.bfloat16,
-    quantization_config=BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type='nf4'
-    ),
-)
+# Load the model using QLoRA
+model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config, device_map={"":0})
 
 # Define the dataset
 dataset_name = "allenai/soda"
@@ -57,9 +54,6 @@ training_args = TrainingArguments(
     learning_rate=5e-5,  # Increased learning rate
     fp16=True,  # Enable mixed precision training
     dataloader_num_workers=4,  # Number of subprocesses for data loading
-    # QLoRA uses paged_adamw_32bit optimizer
-    optimization_strategy="epoch",
-    optimizer_type="paged_adamw_32bit",
 )
 
 # Prepare the training
