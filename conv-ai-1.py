@@ -1,0 +1,58 @@
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
+from transformers import DataCollatorForLanguageModeling
+from datasets import load_dataset, DatasetDict
+
+# Define the model and tokenizer
+model_name = "/content/drive/MyDrive/Vergil-GPT2-model-prosocial dataset"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+# Preprocess the dataset
+def preprocess_dataset(example):
+    context = example['context']
+    dialogues = " ".join([turn['text'] for turn in example['thread']])
+    return tokenizer(context + " " + dialogues, truncation=True, padding='max_length', max_length=512)
+
+# Load and preprocess the dataset
+dataset = load_dataset("conv_ai")
+dataset = dataset.map(preprocess_dataset, remove_columns=dataset["train"].column_names)
+
+# Split the dataset into training and validation sets
+train_dataset = dataset["train"].train_test_split(test_size=0.1)["train"]
+eval_dataset = dataset["train"].train_test_split(test_size=0.1)["test"]
+
+# Define the output directory path
+output_dir = "/content/drive/MyDrive/Colab Notebooks/trained-model"
+
+# Define the training arguments
+training_args = TrainingArguments(
+    output_dir=output_dir,
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    save_steps=10000,
+    save_total_limit=2,
+    fp16=True,  # Enable mixed-precision training
+    gradient_accumulation_steps=4,  # Number of update steps to accumulate before performing a backward/update pass.
+)
+
+# Create the data collator
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+# Create the Trainer instance
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    data_collator=data_collator,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+    tokenizer=tokenizer,
+)
+
+# Fine-tune the model
+trainer.train()
+
+# Save the fine-tuned model
+trainer.save_model(output_dir)

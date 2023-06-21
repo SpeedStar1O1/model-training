@@ -1,0 +1,70 @@
+!pip install torch
+!pip install datasets
+!pip install transformers==4.29.2
+!pip install tokenizers==0.13.3
+!pip install toml==0.10.2
+!pip install accelerate
+
+from accelerate import Accelerator
+import torch
+from datasets import load_dataset
+from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset, 
+                          DataCollatorForLanguageModeling, TrainingArguments, Trainer)
+
+# Initialize the accelerator
+accelerator = Accelerator()
+
+# Define the model and tokenizer
+model_name = "SpeedStar101/VergilGPT2" # Be sure to change to your model you want to train
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Set padding token
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+# Define the dataset
+dataset_name = "allenai/soda"  # Specify the name of the HuggingFace dataset you want to use
+dataset = load_dataset(dataset_name)
+
+# Preprocess the dataset
+def preprocess_function(examples):
+    # Join dialogue sentences into a single string
+    dialogues = [' '.join(dialogue) for dialogue in examples["dialogue"]]
+    return tokenizer(dialogues, padding='max_length', truncation=True, max_length=512)
+
+# Preprocess the training dataset
+encoded_dataset = dataset["train"].map(preprocess_function, batched=True)
+
+# Define the data collator
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+# Define the training arguments
+training_args = TrainingArguments(
+    output_dir="/content/drive/MyDrive/Colab Notebooks/trained-model",
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    save_steps=10000,
+    save_total_limit=2,
+)
+
+# Prepare the training
+model, train_dataset = accelerator.prepare(model, encoded_dataset)
+
+# Create the Trainer instance
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    data_collator=data_collator,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+    tokenizer=tokenizer,
+)
+
+# Fine-tune the model
+trainer.train()
+
+# Save the fine-tuned model
+trainer.save_model(training_args.output_dir)
