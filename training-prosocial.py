@@ -52,7 +52,6 @@ trainer = Trainer(
     data_collator=data_collator,
     train_dataset=train_dataset,
     eval_dataset=val_dataset,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     tokenizer=tokenizer,
 )
 

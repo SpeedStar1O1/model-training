@@ -5,7 +5,7 @@ from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset,
                           DataCollatorForLanguageModeling, TrainingArguments, Trainer, AdamW, BitsAndBytesConfig)
 
 # Initialize the accelerator
-accelerator = Accelerator(fp16=True)  # Enable mixed precision training
+accelerator = Accelerator()
 
 # Define the model and tokenizer
 model_name = "gpt2-medium"
@@ -20,7 +20,7 @@ model = AutoModelForCausalLM.from_pretrained(
     model_name_or_path=model_name,
     load_in_4bit=True,
     device_map='auto',
-    max_memory=48,  # Assuming you have a 48GB GPU
+    max_memory=48,  # Change this depending on your system
     torch_dtype=torch.bfloat16,
     quantization_config=BitsAndBytesConfig(
         load_in_4bit=True,

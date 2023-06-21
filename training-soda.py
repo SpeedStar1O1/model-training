@@ -1,21 +1,14 @@
-!pip install torch
-!pip install datasets
-!pip install transformers==4.29.2
-!pip install tokenizers==0.13.3
-!pip install toml==0.10.2
-!pip install accelerate
-
 from accelerate import Accelerator
 import torch
 from datasets import load_dataset
 from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset, 
-                          DataCollatorForLanguageModeling, TrainingArguments, Trainer)
+                          DataCollatorForLanguageModeling, TrainingArguments, Trainer, AdamW)
 
 # Initialize the accelerator
-accelerator = Accelerator()
+accelerator = Accelerator(fp16=True)  # Enable mixed precision training
 
 # Define the model and tokenizer
-model_name = "SpeedStar101/VergilGPT2" # Be sure to change to your model you want to train
+model_name = "gpt2-medium"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Set padding token
@@ -25,12 +18,11 @@ if tokenizer.pad_token is None:
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # Define the dataset
-dataset_name = "allenai/soda"  # Specify the name of the HuggingFace dataset you want to use
+dataset_name = "allenai/soda"
 dataset = load_dataset(dataset_name)
 
 # Preprocess the dataset
 def preprocess_function(examples):
-    # Join dialogue sentences into a single string
     dialogues = [' '.join(dialogue) for dialogue in examples["dialogue"]]
     return tokenizer(dialogues, padding='max_length', truncation=True, max_length=512)
 
@@ -42,12 +34,16 @@ data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 # Define the training arguments
 training_args = TrainingArguments(
-    output_dir="/content/drive/MyDrive/Colab Notebooks/trained-model",
+    output_dir="trained-models",
     overwrite_output_dir=True,
     num_train_epochs=3,
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=8,  # Increased batch size
+    gradient_accumulation_steps=2,  # Using gradient accumulation
     save_steps=10000,
     save_total_limit=2,
+    learning_rate=5e-5,  # Increased learning rate
+    fp16=True,  # Enable mixed precision training
+    dataloader_num_workers=4,  # Number of subprocesses for data loading
 )
 
 # Prepare the training
@@ -59,7 +55,6 @@ trainer = Trainer(
     args=training_args,
     train_dataset=train_dataset,
     data_collator=data_collator,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     tokenizer=tokenizer,
 )
 
