@@ -40,7 +40,8 @@ def preprocess_function(examples):
         max_length=512,
         return_tensors="pt",
     )
-    inputs = {key: value.squeeze() for key, value in inputs.items()}
+    inputs["input_ids"] = inputs["input_ids"].squeeze()
+    inputs["attention_mask"] = inputs["attention_mask"].squeeze()
     return inputs
 
 # Apply the preprocess function to the datasets
