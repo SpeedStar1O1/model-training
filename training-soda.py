@@ -6,6 +6,7 @@ from transformers import (AutoTokenizer, AutoModelForCausalLM, TextDataset,
 from accelerate import Accelerator
 from transformers import AdamW
 from transformers import EarlyStoppingCallback
+from sklearn.model_selection import train_test_split
 
 accelerator = Accelerator()  # Initialize accelerator
 
@@ -32,7 +33,27 @@ def preprocess_function(examples):
 # Preprocess the datasets
 encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-# Split the dataset into training and evaluation sets
+# Define the data collator
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+# Define the training arguments
+training_args = TrainingArguments(
+    output_dir="/content/drive/MyDrive/Colab Notebooks/trained-model",
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    save_steps=10000,
+    save_total_limit=2,
+)
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    return {'loss': torch.nn.functional.cross_entropy(logits, labels)}
+
+# Define optimizer
+optimizer = AdamW(model.parameters(), lr=5e-5)
+
+# Split the dataset into training and validation sets
 train_dataset = encoded_dataset["train"]
 eval_dataset = encoded_dataset["validation"]  # Assuming the dataset has a validation split
 
@@ -43,27 +64,12 @@ trainer = Trainer(
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,  # Pass the evaluation dataset here
     data_collator=data_collator,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
-    tokenizer=tokenizer,
-    compute_metrics=compute_metrics,  # Function to compute metrics
-)
-
-# Define optimizer
-optimizer = AdamW(model.parameters(), lr=5e-5)
-
-# Create the Trainer instance
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=encoded_dataset,
-    data_collator=data_collator,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,  # Function to compute metrics
 )
 
 # Prepare everything with the accelerator
-model, optimizer, train_dataset, trainer = accelerator.prepare(model, optimizer, encoded_dataset, trainer)
+model, optimizer, train_dataset, trainer = accelerator.prepare(model, optimizer, train_dataset, trainer)
 
 # Fine-tune the model
 trainer.train()
