@@ -66,6 +66,8 @@ trainer = Trainer(
     data_collator=data_collator,
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,  # Function to compute metrics
+    fp16=True,  # Enable mixed-precision training
+    gradient_accumulation_steps=4,  # Number of updates steps to accumulate before performing a backward/update pass.
 )
 
 # Prepare everything with the accelerator
