@@ -29,32 +29,24 @@ def preprocess_function(examples):
     dialogues = [' '.join(dialogue) for dialogue in examples["dialogue"]]
     return tokenizer(dialogues, padding='max_length', truncation=True, max_length=512)
 
-# Preprocess the training dataset
-encoded_dataset = dataset["train"].map(preprocess_function, batched=True)
+# Preprocess the datasets
+encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-# Define the data collator
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+# Split the dataset into training and evaluation sets
+train_dataset = encoded_dataset["train"]
+eval_dataset = encoded_dataset["validation"]  # Assuming the dataset has a validation split
 
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    return {'loss': torch.nn.functional.cross_entropy(logits, labels)}
-
-output_dir = "/content/drive/MyDrive/Colab Notebooks/models/Vergil-GPT2-main-model"
-# Define the training arguments
-training_args = TrainingArguments(
-    output_dir=output_dir,
-    overwrite_output_dir=True,
-    num_train_epochs=3,
-    per_device_train_batch_size=4,
-    save_steps=10000,
-    save_total_limit=2,
-    fp16=True,  # Enable mixed-precision training
-    gradient_accumulation_steps=4,  # Number of updates steps to accumulate before performing a backward/update pass.
-    load_best_model_at_end=True,  # Load the best model at the end
-    evaluation_strategy = 'steps',  # Add this line
+# Create the Trainer instance
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=eval_dataset,  # Pass the evaluation dataset here
+    data_collator=data_collator,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+    tokenizer=tokenizer,
+    compute_metrics=compute_metrics,  # Function to compute metrics
 )
-
-
 
 # Define optimizer
 optimizer = AdamW(model.parameters(), lr=5e-5)
@@ -69,13 +61,6 @@ trainer = Trainer(
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,  # Function to compute metrics
 )
-
-
-# Check if a checkpoint exists
-# checkpoint_dir = "/content/drive/MyDrive/Colab Notebooks/trained-model/checkpoint-10000"  # Modify with your checkpoint path
-# checkpoint = None
-# if os.path.isdir(checkpoint_dir) and os.listdir(checkpoint_dir):
-#    checkpoint = checkpoint_dir
 
 # Prepare everything with the accelerator
 model, optimizer, train_dataset, trainer = accelerator.prepare(model, optimizer, encoded_dataset, trainer)
