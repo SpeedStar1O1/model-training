@@ -11,7 +11,7 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 
 # Define the model and tokenizer
-model_name = "EleutherAI/gpt-neo-1.3B"
+model_name = "gpt2"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Set padding token
